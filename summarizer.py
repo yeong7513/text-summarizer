@@ -1,19 +1,17 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, AnyHttpUrl
-from requests_html import HTMLSession
 import trafilatura, httpx, os, logging, tiktoken
 from openai import OpenAI, APIError
 from dotenv import load_dotenv
+from urllib.parse import urlparse
+from dzen_parser import dzen_parser
 
-load_dotenv()
-logger = logging.getLogger(__name__)
 app = FastAPI()
 
-class SummaryRequest(BaseModel):
-    url: AnyHttpUrl  # Автоматическая валидация URL
-    max_length: int = 300  # Ограничение длины суммаризации
+load_dotenv()
 
 # Настройка логирования
+logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -30,16 +28,13 @@ client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
 tokenizer = tiktoken.get_encoding("cl100k_base")
 
 
-async def fetch_text(url: str) -> str:
-    try:
-        # Для JS-сайтов
-        session = HTMLSession()
-        resp = session.get(url)
-        resp.html.render(timeout=20)  # Рендеринг JavaScript
-        html = resp.html.html
-        return trafilatura.extract(html, include_links=False, include_tables=False)
-    except Exception as e:
-        # Для простых сайтов без JS
+def fetch_text(url: str) -> str:
+    # Проверяем принадлежность к Dzen
+    parsed = urlparse(url)
+    if "dzen.ru" in parsed.netloc:
+        return dzen_parser(url)
+    else:
+        # Для обычных сайтов(без JS)
         downloaded = trafilatura.fetch_url(url)
         return trafilatura.extract(downloaded)
 
@@ -48,7 +43,7 @@ def truncate_text(text, max_tokens):
     tokens = tokenizer.encode(text)[:max_tokens]
     return tokenizer.decode(tokens)
 
-async def summarize_with_deepseek(text: str, max_length: int) -> str:
+def summarize_with_deepseek(text: str, max_length: int) -> str:
     """Суммаризация с обработкой ошибок и ограничениями"""
     try:
         truncated_text = truncate_text(text, MAX_INPUT_TOKENS)
@@ -81,16 +76,20 @@ async def summarize_with_deepseek(text: str, max_length: int) -> str:
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         raise Exception("Summary generation failed")
-    
+
+class SummaryRequest(BaseModel):
+    url: AnyHttpUrl  # Автоматическая валидация URL
+    max_length: int = 300  # Ограничение длины суммаризации
+
 @app.post("/summarize")
-async def summarize(request: SummaryRequest):
+def summarize(request: SummaryRequest):
     try:
-        text = await fetch_text(str(request.url))
+        text = fetch_text(str(request.url))
         if not text:
             raise HTTPException(status_code=400, detail="Не удалось извлечь текст")
-        
-        logger.info(f"text: {text}")
-        summary = await summarize_with_deepseek(text, request.max_length)
+        logger.info(f"Text length: {len(text)}")
+
+        summary = summarize_with_deepseek(text, request.max_length)
         logger.info(f"summary: {summary}")
         return {"summary": summary}
     
@@ -98,3 +97,4 @@ async def summarize(request: SummaryRequest):
         raise HTTPException(status_code=504, detail="Таймаут подключения")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
