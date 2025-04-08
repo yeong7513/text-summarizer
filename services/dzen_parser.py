@@ -7,6 +7,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 import logging
 import traceback
+import asyncio
 
 def get_page(url: str) -> BeautifulSoup:
     """Получение и парсинг страницы"""
@@ -117,3 +118,6 @@ def dzen_parser(url: str) -> str:
         logging.error(f"Ошибка парсера: {traceback.format_exc()}")
         raise RuntimeError(f"Ошибка парсинга статьи: {str(e)}") from e
     
+# Асинхронная обёртка для dzen_parser
+async def dzen_parser_async(url: str) -> str:
+    return await asyncio.to_thread(dzen_parser, url)

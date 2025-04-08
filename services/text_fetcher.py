@@ -1,15 +1,20 @@
 from urllib.parse import urlparse
+import httpx
+import asyncio
 import trafilatura
-from services.dzen_parser import dzen_parser
+from services.dzen_parser import dzen_parser_async
 
 # Функция для извлечения текста с указанного URL
-def fetch_text(url: str) -> str:
-    # Проверка принадлежности домена к Dzen
+async def fetch_text_async(url: str) -> str:
+    # Разбираем URL для определения домена
     parsed = urlparse(url)
     if "dzen.ru" in parsed.netloc:
-        # Use dzen_parser for Dzen URLs
-        return dzen_parser(url)
+        # Для Dzen.ru используем dzen_parser
+        return await dzen_parser_async(url)
     else:
         # Для обычных сайтов (без поддержки JS)
-        downloaded = trafilatura.fetch_url(url)
-        return trafilatura.extract(downloaded)
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            downloaded = response.text
+            return await asyncio.to_thread(trafilatura.extract, downloaded)
+

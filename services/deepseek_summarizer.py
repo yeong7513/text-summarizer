@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from config import MAX_INPUT_TOKENS, MAX_TOKENS, client, tokenizer
 from openai import APIError
 
@@ -40,3 +41,7 @@ def summarize_with_deepseek(text: str, max_length: int) -> str:
     except Exception as e:
         logging.error(f"Unexpected error: {str(e)}")
         raise Exception("Summary generation failed")
+
+# Асинхронная обёртка для функции суммаризации
+async def summarize_with_deepseek_async(text: str, max_length: int) -> str:
+    return await asyncio.to_thread(summarize_with_deepseek, text, max_length)
