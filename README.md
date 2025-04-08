@@ -145,5 +145,5 @@ curl -X POST http://localhost:8000/summarize \
 
 ## 📄 License
 
-MIT License © 2025
+MIT License © 2025 Yeongchae Kim
 
